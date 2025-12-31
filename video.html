@@ -14,37 +14,52 @@
 
 <style>
 html,body{
-  margin:0;padding:0;height:100%;width:100%;
+  margin:0;
+  padding:0;
+  height:100%;
   font-family:Arial;
   background:#f5f5f5;
-  display:flex;flex-direction:column;
 }
 h3{
-  background:#feca2a;
-  text-align:center;
-  padding:6px;
   margin:0;
+  padding:8px;
+  text-align:center;
+  background:#feca2a;
 }
-#iframe-container{flex:1;position:relative}
-iframe{width:100%;height:100%;border:none}
+#iframe-container{
+  height:100%;
+  position:relative;
+}
+iframe{
+  width:100%;
+  height:calc(100% - 120px);
+  border:none;
+}
 #controls{
   position:absolute;
   bottom:0;
   width:100%;
-  background:#fff;
-  padding:10px;
+  background:rgba(0,0,0,.0);;
+  padding:12px;
   text-align:center;
+  box-shadow:0 -2px 6px rgba(0,0,0,.0);
 }
-#timer{font-size:22px;color:#008000;margin-bottom:6px}
+#timer{
+  font-size:22px;
+  color:#008000;
+  margin-bottom:6px;
+}
 button{
-  padding:10px 20px;
+  padding:12px 26px;
   font-size:18px;
   border:none;
   border-radius:8px;
   background:#0088cc;
   color:#fff;
 }
-button:disabled{background:gray}
+button:disabled{
+  background:#999;
+}
 </style>
 </head>
 
@@ -62,12 +77,13 @@ button:disabled{background:gray}
 </div>
 
 <script>
-/* ===== Telegram ===== */
+/* ================= TELEGRAM ================= */
 const tg = window.Telegram?.WebApp;
 if(tg) tg.ready();
-const userId = tg?.initDataUnsafe?.user?.id || "guest";
+const userId = tg?.initDataUnsafe?.user?.id;
+if(!userId && tg){ tg.close(); }
 
-/* ===== Firebase ===== */
+/* ================= FIREBASE ================= */
 firebase.initializeApp({
   apiKey: "AIzaSyBl0PIm4lvZea96Bte3KaKQJvurGE1P8Es",
   databaseURL: "https://post-c7e41-default-rtdb.firebaseio.com",
@@ -75,27 +91,28 @@ firebase.initializeApp({
   appId: "1:758133068153:web:28ef27e45d8037e0d49fa8"
 });
 const db = firebase.database();
+const userRef = db.ref("users/" + userId);
 
-/* ===== ADS LIST (Adsgram) ===== */
+/* ================= ADS CONFIG ================= */
 const ads = [
   "https://t.me/adsgram_ai?start=AD1",
   "https://t.me/adsgram_ai?start=AD2",
   "https://t.me/adsgram_ai?start=AD3"
 ];
 
-/* ===== CONFIG ===== */
 const secondsPerAd = 15;
-const totalReward = 200;
+const rewardPerSession = 200;
 
+/* ================= STATE ================= */
 let currentAd = 0;
 let timeLeft = secondsPerAd;
-let interval;
+let timerInterval;
 
 const adFrame = document.getElementById("adFrame");
 const timerEl = document.getElementById("timer");
 const doneBtn = document.getElementById("doneBtn");
 
-/* ===== START ADS ===== */
+/* ================= LOAD ADS ================= */
 function loadAd(){
   if(currentAd >= ads.length){
     timerEl.innerText = "✅ সব Ads শেষ";
@@ -107,11 +124,12 @@ function loadAd(){
   timeLeft = secondsPerAd;
   timerEl.innerText = timeLeft;
 
-  interval = setInterval(()=>{
+  timerInterval = setInterval(()=>{
     timeLeft--;
     timerEl.innerText = timeLeft;
+
     if(timeLeft <= 0){
-      clearInterval(interval);
+      clearInterval(timerInterval);
       currentAd++;
       loadAd();
     }
@@ -120,32 +138,56 @@ function loadAd(){
 
 loadAd();
 
-/* ===== DONE BUTTON ===== */
+/* ================= DONE BUTTON ================= */
 doneBtn.onclick = async ()=>{
-  const userRef = db.ref("users/"+userId+"/balance");
+  const now = new Date();
+  const currentHour = now.getHours();
 
   try{
     const snap = await userRef.get();
-    const balance = snap.exists() ? snap.val() : 0;
-    const newBal = balance + totalReward;
+    if(!snap.exists()){
+      alert("User data missing");
+      return;
+    }
 
-    await userRef.set(newBal);
+    const d = snap.val();
 
-    alert("🎉 200 Token যোগ হয়েছে!\nNew Balance: "+newBal);
+    let balance = d.balance || 0;
+    let dailyDone = d.dailyDone || 0;
+    let hourlyDone = d.hourlyDone || 0;
+    let lastHour = d.lastHour ?? currentHour;
+
+    // Hour reset
+    if(lastHour !== currentHour){
+      hourlyDone = 0;
+      lastHour = currentHour;
+    }
+
+    await userRef.update({
+      balance: balance + rewardPerSession,
+      dailyDone: dailyDone + 1,
+      hourlyDone: hourlyDone + 1,
+      lastHour: lastHour
+    });
 
     if(tg){
       tg.sendData("ads_verified");
-      tg.close();
     }
-  }catch(e){
+
+    // 👉 Back to homepage
+    window.location.href = "index.html";
+
+  }catch(err){
     alert("❌ Token add failed");
   }
 };
 
-/* ===== ANTI CHEAT ===== */
-window.addEventListener("beforeunload", e=>{
-  e.preventDefault();
-  e.returnValue = "Ads শেষ না করলে token পাবেন না!";
+/* ================= ANTI CLOSE ================= */
+window.addEventListener("beforeunload", function(e){
+  if(doneBtn.disabled){
+    e.preventDefault();
+    e.returnValue = "Ads শেষ না করলে token পাবেন না!";
+  }
 });
 </script>
 
