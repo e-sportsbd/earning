@@ -56,7 +56,6 @@ body{background:#0b0f1a;color:#fff}
   margin-top:8px
 }
 
-/* Bottom Nav */
 .nav{
   position:fixed;
   bottom:0;
@@ -76,7 +75,6 @@ body{background:#0b0f1a;color:#fff}
 
 <div class="app">
 
-  <!-- Invite Card -->
   <div class="card">
     <h2>🎁 Invite & Earn</h2>
     <p class="note">Invite friends & earn SHIB</p>
@@ -88,11 +86,10 @@ body{background:#0b0f1a;color:#fff}
 
     <p class="note">
       Reward per invite:
-      <b><span id="rewardPerInvite">0</span> SHIB</b>
+      <b><span id="rewardPerInvite">1000</span> SHIB</b>
     </p>
   </div>
 
-  <!-- Stats -->
   <div class="card">
     <h2>📊 Your Stats</h2>
     <div class="stats">
@@ -109,7 +106,6 @@ body{background:#0b0f1a;color:#fff}
 
 </div>
 
-<!-- Bottom Navigation -->
 <div class="nav">
   <span onclick="location.href='index.html'">Home</span>
   <span onclick="location.href='tasks.html'">Tasks</span>
@@ -121,37 +117,36 @@ body{background:#0b0f1a;color:#fff}
 <script type="module">
 import { initializeApp } from
 "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import {
-  getFirestore, doc, getDoc, setDoc
-} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
-/* ---------- TELEGRAM ---------- */
+import {
+  getDatabase, ref, get, set
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+
+/* TELEGRAM */
 const tg = Telegram.WebApp;
 tg.ready();
 tg.expand();
 
 const user = tg.initDataUnsafe.user;
-if(!user){
-  tg.close();
-}
+if(!user) tg.close();
 const uid = String(user.id);
 
-/* ---------- BOT INFO ---------- */
-const BOT_USERNAME = "ent_incbot"; // 🔴 change if needed
+/* BOT */
+const BOT_USERNAME = "ent_incbot";
 const inviteLink = `https://t.me/${BOT_USERNAME}?start=${uid}`;
 document.getElementById("inviteLink").innerText = inviteLink;
 
-/* ---------- FIREBASE ---------- */
+/* FIREBASE */
 const firebaseConfig = {
   apiKey: "AIzaSyBl0PIm4lvZea96Bte3KaKQJvurGE1P8Es",
-  projectId: "post-c7e41",
-  appId: "1:758133068153:web:28ef27e45d8037e0d49fa8"
+  databaseURL: "https://post-c7e41-default-rtdb.firebaseio.com",
+  projectId: "post-c7e41"
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const db = getDatabase(app);
 
-/* ---------- COPY / SHARE ---------- */
+/* COPY / SHARE */
 window.copyLink = ()=>{
   navigator.clipboard.writeText(inviteLink);
   tg.showAlert("✅ Invite link copied");
@@ -163,31 +158,21 @@ window.shareTG = ()=>{
   );
 };
 
-/* ---------- LOAD DATA ---------- */
+/* LOAD DATA */
 async function loadData(){
+  const userRef = ref(db,"users/"+uid);
+  const snap = await get(userRef);
 
-  // reward per invite (admin control)
-  const adminSnap = await getDoc(doc(db,"admin","invite"));
-  const reward = adminSnap.exists()
-    ? adminSnap.data().reward || 1000
-    : 1000;
-  document.getElementById("rewardPerInvite").innerText = reward;
-
-  // user stats
-  const userRef = doc(db,"users",uid);
-  const userSnap = await getDoc(userRef);
-
-  if(!userSnap.exists()){
-    await setDoc(userRef,{
-      balance:0,
-      totalInvites:0,
-      inviteEarn:0,
-      createdAt:Date.now()
-    });
-  }else{
-    const d = userSnap.data();
+  if(snap.exists()){
+    const d = snap.val();
     document.getElementById("totalInvites").innerText = d.totalInvites || 0;
     document.getElementById("inviteEarn").innerText = d.inviteEarn || 0;
+  }else{
+    await set(userRef,{
+      balance:0,
+      totalInvites:0,
+      inviteEarn:0
+    });
   }
 }
 
